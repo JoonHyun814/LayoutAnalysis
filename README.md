@@ -1,7 +1,7 @@
 # jejedu_LayoutAnalysis
 
 ## 환경설정(pytorch cuda 11.6)
-'''
+```
 
 docker run --name [NAME] -it -v [HOSTPATH]:/opt --gpus all python:latest
 
@@ -22,23 +22,24 @@ conda activate py3.8
 cd opt
 
 git clone https://github.com/JoonHyun814/jejedu_LayoutAnalysis.git
-'''
+```
 
 ## 데이터 셋 download
-'''
+```
 wget https://guillaumejaume.github.io/FUNSD/dataset.zip
 
 unzip dataset.zip
 
 mv dataset FUNSD
-
+```
 ## 필요 패키지 설치
+```
 cd jejedu_LayoutAnalysis
 
 pip install -r requirements.txt
 
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
-'''
+```
 
 ## pretrained model download
 
