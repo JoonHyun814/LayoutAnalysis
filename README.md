@@ -1,6 +1,7 @@
 # jejedu_LayoutAnalysis
 
 ## 환경설정(pytorch cuda 11.6)
+'''
 
 docker run --name [NAME] -it -v [HOSTPATH]:/opt --gpus all python:latest
 
@@ -21,9 +22,10 @@ conda activate py3.8
 cd opt
 
 git clone https://github.com/JoonHyun814/jejedu_LayoutAnalysis.git
-
+'''
 
 ## 데이터 셋 download
+'''
 wget https://guillaumejaume.github.io/FUNSD/dataset.zip
 
 unzip dataset.zip
@@ -36,9 +38,10 @@ cd jejedu_LayoutAnalysis
 pip install -r requirements.txt
 
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
-
+'''
 
 ## pretrained model download
+
 east_vgg16.pth download
 https://drive.google.com/file/d/1gkdKFrIYp_T9K2fziBTaypyuuDD5VRgu/view?usp=sharing
 
@@ -46,11 +49,3 @@ vgg16_bn-6c64b313.pth download
 https://drive.google.com/file/d/1wetfUNTHO_2aKfRRTmtylY2bAV5D9CjC/view?usp=sharing
 
 jejedu_LayoutAnalysis/pths/ 에 저장
-
-
-
-apt install tesseract-ocr
-
-apt-get install tesseract-ocr-kor tesseract-ocr-jpn
-
-pip install pytesseract==0.3.9
