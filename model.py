@@ -174,6 +174,7 @@ class ImageEmbedding(nn.Module):
 			nn.ReLU(True),
 			nn.Dropout(),
 			nn.Linear(256, 60),
+			nn.Sigmoid()
 		)
 
 	def forward(self, img, boxes):
@@ -259,6 +260,7 @@ if __name__ == '__main__':
 	print('input boxes shape',input_box.shape)
 	out = model(input,input_box)
 	print('output shape:',out.shape)
+	print(out)
 
 	utils.plot_boxes(img, boxes)
 	img.save(ocr_result)

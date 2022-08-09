@@ -1,17 +1,29 @@
 import torch
 import torch.nn as nn
 from torchvision import transforms
-from PIL import Image, ImageDraw
-# from model import EAST
+from PIL import Image, ImageDraw, ImageFont
+
 import os
 import math
 import numpy as np
 import lanms
+import random
+import torch.backends.cudnn as cudnn
 
 
 labels = {'background':0,'other':1,'header':2,'question':3,'answer':4}
 OCR_VGG_cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
 img_emb_cfg = [16, 16, 32, 32]
+
+
+def seed_fix(num):
+	torch.manual_seed(42)
+	torch.cuda.manual_seed(42)
+	torch.cuda.manual_seed_all(42)
+	np.random.seed(42)
+	cudnn.benchmark = False
+	cudnn.deterministic = True
+	random.seed(42)
 
 
 def get_rotate_mat(theta):
@@ -174,15 +186,19 @@ def detect(img, model, device):
 	return adjust_ratio(boxes, ratio_w, ratio_h)
 
 
-def plot_boxes(img, boxes):
+def plot_boxes(img, boxes,outline = (0,255,0),text=None,text_color = (0,0,0)):
 	'''plot boxes on image
 	'''
 	if boxes is None:
 		return img
 	
 	draw = ImageDraw.Draw(img)
-	for box in boxes:
-		draw.polygon([box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7]], outline=(0,255,0))
+	for idx,box in enumerate(boxes):
+		draw.polygon([box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7]], outline=outline)
+		if text != None:
+			font_size = 15
+			font = ImageFont.truetype("arial.ttf", font_size)
+			draw.text((box[0], box[1]-5),f'{text[idx]}',text_color,font=font)
 	return
 
 
