@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 import math
 
 from PIL import Image
@@ -160,23 +161,13 @@ def image_crop(img,box):
 	return cropped_img
 
 
-def Position_image_embeding(img,box):
-	x_min,y_min,_,_,x_max,y_max,_,_,_ = box
-	image_w, image_h = img.size
-	cropped_img = img.crop([x_min,y_min,x_max,y_max])
-	img_embedding_block = ImageEmbedding(utils.make_layers(utils.img_emb_cfg, batch_norm=True))
-	img_embedding = img_embedding_block(utils.load_pil(cropped_img))
-	pos_embedding = torch.tensor([x_min/image_w,y_min/image_h,x_max/image_w,y_max/image_h])
-	return torch.cat([img_embedding,pos_embedding.unsqueeze(0)],axis=1)
-
-
 class ImageEmbedding(nn.Module):
 	def __init__(self,features) -> None:
 		super(ImageEmbedding,self).__init__()
 		self.features = features
-		self.avgpool = nn.AdaptiveAvgPool2d((3, 9))
+		self.avgpool = nn.AdaptiveAvgPool2d((3, 15))
 		self.classifier = nn.Sequential(
-			nn.Linear(utils.img_emb_cfg[-1] * 3 * 9, 1012),
+			nn.Linear(utils.img_emb_cfg[-1] * 3 * 15, 1012),
 			nn.ReLU(True),
 			nn.Dropout(),
 			nn.Linear(1012, 256),
@@ -185,66 +176,72 @@ class ImageEmbedding(nn.Module):
 			nn.Linear(256, 60),
 		)
 
-	def forward(self, x):
-		x = self.features(x)
-		x = self.avgpool(x)
-		x = x.view(x.size(0), -1)
-		x = self.classifier(x)
+	def forward(self, img, boxes):
+		emb = []
+		batch, c, image_h, image_w = img.shape
+		for b in range(batch):
+			batch_emb = []
+			for box in boxes[b]:
+				x_min,y_min,_,_,x_max,y_max,_,_,_ = box
+				cropped_img = img[b][:,int(y_min):int(y_max),int(x_min):int(x_max)]
+				cropped_img = self.features(cropped_img.unsqueeze(0))
+				cropped_img = self.avgpool(cropped_img)
+				cropped_img = cropped_img.view(cropped_img.size(0), -1)
+				cropped_img = self.classifier(cropped_img)
+				pos_embedding = torch.tensor([x_min/image_w,y_min/image_h,x_max/image_w,y_max/image_h])
+				batch_emb.append(torch.cat((pos_embedding.unsqueeze(0),cropped_img),axis=1))
+			emb.append(torch.cat(batch_emb,axis=0).unsqueeze(0))
+		return torch.cat(emb,axis=0)
+
+
+##################### Classification ###########################
+
+class LayoutClassification(nn.Module):
+	def __init__(self, emb_dim, out_dim , num_heads, dropout_ratio: float = 0.2, **kwargs):
+		super().__init__()
+		self.emb_block = ImageEmbedding(utils.make_layers(utils.img_emb_cfg, batch_norm=True))
+
+		self.emb_dim = emb_dim
+		self.num_heads = num_heads 
+		self.scaling = (self.emb_dim // num_heads) ** -0.5
+		
+		self.value = nn.Linear(emb_dim, emb_dim)
+		self.key = nn.Linear(emb_dim, emb_dim)
+		self.query = nn.Linear(emb_dim, emb_dim)
+		self.att_drop = nn.Dropout(dropout_ratio)
+
+		self.linear = nn.Linear(emb_dim, out_dim)
+				
+	def forward(self, img, boxes):
+		emb = self.emb_block(img,boxes)
+		# query, key, value
+		Q = self.query(emb)
+		K = self.key(emb)
+		V = self.value(emb)
+
+		# q = k = v = patch_size**2 + 1 & h * d = emb_dim
+		Q = rearrange(Q, 'b q (h d) -> b h q d', h=self.num_heads)
+		K = rearrange(K, 'b k (h d) -> b h d k', h=self.num_heads)
+		V = rearrange(V, 'b v (h d) -> b h v d', h=self.num_heads)
+
+		## scaled dot-product
+		weight = torch.matmul(Q, K) 
+		weight = weight * self.scaling
+		
+		attention = torch.softmax(weight, dim=-1)
+		attention = self.att_drop(attention)
+
+		context = torch.matmul(attention, V) 
+		context = rearrange(context, 'b h q d -> b q (h d)')
+
+		x = self.linear(context)
 		return x
-
-
-##################### Transformer ###########################
-
-class multi_head_attention(nn.Module):
-    def __init__(self, emb_dim, out_dim , num_heads, dropout_ratio: float = 0.2, verbose = False, **kwargs):
-        super().__init__()
-        self.v = verbose
-
-        self.emb_dim = emb_dim 
-        self.num_heads = num_heads 
-        self.scaling = (self.emb_dim // num_heads) ** -0.5
-        
-        self.value = nn.Linear(emb_dim, emb_dim)
-        self.key = nn.Linear(emb_dim, emb_dim)
-        self.query = nn.Linear(emb_dim, emb_dim)
-        self.att_drop = nn.Dropout(dropout_ratio)
-
-        self.linear = nn.Linear(emb_dim, out_dim)
-                
-    def forward(self, x):
-        # query, key, value
-        Q = self.query(x)
-        K = self.key(x)
-        V = self.value(x)
-        if self.v: print(Q.size(), K.size(), V.size()) 
-
-        # q = k = v = patch_size**2 + 1 & h * d = emb_dim
-        Q = rearrange(Q, 'b q (h d) -> b h q d', h=self.num_heads)
-        K = rearrange(K, 'b k (h d) -> b h d k', h=self.num_heads)
-        V = rearrange(V, 'b v (h d) -> b h v d', h=self.num_heads)
-        if self.v: print(Q.size(), K.size(), V.size()) 
-
-        ## scaled dot-product
-        weight = torch.matmul(Q, K) 
-        weight = weight * self.scaling
-        if self.v: print(weight.size()) 
-        
-        attention = torch.softmax(weight, dim=-1)
-        attention = self.att_drop(attention) 
-        if self.v: print(attention.size())
-
-        context = torch.matmul(attention, V) 
-        context = rearrange(context, 'b h q d -> b q (h d)')
-        if self.v: print(context.size())
-
-        x = self.linear(context)
-        return x , attention
 
 
 if __name__ == '__main__':
 	img_path    = '../FUNSD/testing_data/images/82092117.png'
 	model_path  = './pths/east_vgg16.pth'
-	res_img     = './res.bmp'
+	ocr_result     = './out/ocr_result.png'
 	label = ["other","header","question","answer"]
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -255,21 +252,13 @@ if __name__ == '__main__':
 	img_size = img.size
 	boxes = utils.detect(img, model, device)
 	
-	print(len(boxes),boxes[0])
-	print(len(boxes),boxes[1])
-	print(len(boxes),boxes[2])
-	print(len(boxes),boxes[3])
-	
-	emb = []
-	for box in boxes:
-		emb.append(Position_image_embeding(img,box))
+	model = LayoutClassification(64,5,8)
+	input = utils.load_pil(img).unsqueeze(0)
+	print('input img shape:',input.shape)
+	input_box = boxes.unsqueeze(0)
+	print('input boxes shape',input_box.shape)
+	out = model(input,input_box)
+	print('output shape:',out.shape)
 
-	print(emb[0].shape)
-	emb = torch.cat(emb,axis=0)
-	print(emb.shape)
-
-	model_trans = multi_head_attention(64, 4, 4)
-	classes = model_trans(emb.unsqueeze(0).float())[0].shape
-	
-	# plot_img = utils.plot_boxes(img, boxes, classes)
-	# plot_img.save(res_img)
+	utils.plot_boxes(img, boxes)
+	img.save(ocr_result)

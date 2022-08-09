@@ -28,7 +28,30 @@ class FUNSD_Dataset(Dataset):
             img = Image.open(image_path).convert('RGB')
             boxes = utils.detect(img, ocr_model, device)
             self.images.append(img)
-            self.boxes_list.append(boxes)
+            filterd_boxes = []
+            for box in boxes:
+                x_min,y_min,_,_,x_max,y_max,_,_,score = box
+                if x_min <= 0:
+                    x_min = torch.tensor(0.)
+                if x_max <= 0:
+                    x_max = torch.tensor(0.)
+                if y_min <= 0:
+                    y_min = torch.tensor(0.)
+                if y_max <= 0:
+                    y_max = torch.tensor(0.)
+                if x_max >= img.size[0]:
+                    x_max = torch.tensor(img.size[0])
+                if x_min >= img.size[0]:
+                    x_min = torch.tensor(img.size[0])
+                if y_max >= img.size[1]:
+                    y_max = torch.tensor(img.size[1])
+                if y_min >= img.size[1]:
+                    y_min = torch.tensor(img.size[1])
+                
+                box = torch.tensor([x_min,y_min,x_max,y_min,x_max,y_max,x_min,y_max,score])
+                if x_max-x_min > 5 and y_max-y_min > 5:
+                    filterd_boxes.append(box.unsqueeze(0))
+            self.boxes_list.append(torch.cat(filterd_boxes))
 
         print('loading annotations...')
         for ann_path in tqdm(self.ann_pathes):

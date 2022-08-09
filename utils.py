@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from torchvision import transforms
 from PIL import Image, ImageDraw
-from model import EAST
+# from model import EAST
 import os
-from dataset import get_rotate_mat
+import math
 import numpy as np
 import lanms
 
@@ -12,6 +12,12 @@ import lanms
 labels = {'background':0,'other':1,'header':2,'question':3,'answer':4}
 OCR_VGG_cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
 img_emb_cfg = [16, 16, 32, 32]
+
+
+def get_rotate_mat(theta):
+	'''positive theta value means rotate clockwise'''
+	return np.array([[math.cos(theta), -math.sin(theta)], [math.sin(theta), math.cos(theta)]])
+
 
 def make_layers(cfg, batch_norm=False):
 	layers = []
@@ -149,7 +155,7 @@ def adjust_ratio(boxes, ratio_w, ratio_h):
 		return None
 	boxes[:,[0,2,4,6]] /= ratio_w
 	boxes[:,[1,3,5,7]] /= ratio_h
-	return np.around(boxes)
+	return torch.tensor(np.around(boxes))
 	
 	
 def detect(img, model, device):
@@ -199,21 +205,3 @@ def detect_dataset(model, device, test_img_path, submit_path):
 			seq.extend([','.join([str(int(b)) for b in box[:-1]]) + '\n' for box in boxes])
 		with open(os.path.join(submit_path, 'res_' + os.path.basename(img_file).replace('.jpg','.txt')), 'w') as f:
 			f.writelines(seq)
-
-
-if __name__ == '__main__':
-	img_path    = '../FUNSD/testing_data/images/82092117.png'
-	model_path  = './pths/east_vgg16.pth'
-	res_img     = './res.bmp'
-	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-	model = EAST().to(device)
-	model.load_state_dict(torch.load(model_path))
-	model.eval()
-	img = Image.open(img_path).convert('RGB')
-	print(img.size)
-	boxes = detect(img, model, device)
-	print(len(boxes),boxes[0])
-	plot_img = plot_boxes(img, boxes)	
-	plot_img.save(res_img)
-
-
