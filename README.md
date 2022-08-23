@@ -1,4 +1,4 @@
-# jejedu_LayoutAnalysis
+# LayoutAnalysis
 
 ## 환경설정(pytorch cuda 11.6)
 ```
