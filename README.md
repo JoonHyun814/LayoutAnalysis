@@ -7,7 +7,7 @@ docker run --name [NAME] -it -v [HOSTPATH]:/opt --gpus all python:latest
 
 docker start [NAME]
 
-docker exec -it [NAME] 
+docker exec -it [NAME] /bin/bash
 
 wget https://repo.anaconda.com/archive/Anaconda3-2019.10-Linux-x86_64.sh
 
@@ -21,7 +21,7 @@ conda activate py3.8
 
 cd opt
 
-git clone https://github.com/JoonHyun814/jejedu_LayoutAnalysis.git
+git clone https://github.com/JoonHyun814/LayoutAnalysis.git
 ```
 
 ## 데이터 셋 download
