@@ -5,6 +5,8 @@
 
 docker run --name [NAME] -it -v [HOSTPATH]:/opt --gpus all python:latest
 
+exit()
+
 docker start [NAME]
 
 docker exec -it [NAME] /bin/bash
